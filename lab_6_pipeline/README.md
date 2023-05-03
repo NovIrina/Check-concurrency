@@ -21,7 +21,7 @@ module.
 When it is run as a standalone Python program, it should perform all aforementioned stages.
 
 During this assignment you will be working with the UD text description format
-(`.conllu` extension).
+(`.conllu` extension) .
 Refer to the [corresponding document](../docs/public/ud_format.md) for the explanation
 on linguistic information extraction,
 mappings to `pymystem3` and `pymorphy2`, as well as fields description.
