@@ -6,8 +6,7 @@
 > * working with external modules: local and downloaded from PyPi;
 > * working with files: create/read/update;
 > * downloading web pages;
-> * parsing web pages as HTML structure.
-
+> * parsing web pages as HTML structure. 
 
 Scraping as a process contains the following steps:
 
