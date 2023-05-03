@@ -8,6 +8,7 @@
 > * downloading web pages;
 > * parsing web pages as HTML structure.
 
+
 Scraping as a process contains the following steps:
 
 1. Crawling the web-site and collecting all pages that satisfy criteria given.
