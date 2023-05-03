@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ main ]
 
+concurrency:
+  group: ${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMPLEMENTATION_TYPE: html
   REPOSITORY_TYPE: public
