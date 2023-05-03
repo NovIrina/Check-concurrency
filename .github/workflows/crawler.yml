@@ -1,0 +1,551 @@
+name: Corpus Collection and Annotation
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  IMPLEMENTATION_TYPE: html
+  REPOSITORY_TYPE: public
+  GITHUB_REPOSITORY: ${{ github.repository }}
+  BRANCH_NAME: ${{ github.ref }}
+
+jobs:
+  # Stage 1. Style checks
+  install-dependencies:
+    name: Installing dependencies
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Confirming everything is OK
+        run: |
+          ls -la ~/.local/bin
+          ls -la venv
+
+  requirements-check:
+    name: Requirements check
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Dependencies check
+        run: |
+          bash config/stage_1_style_tests/_stage_requirements_check.sh
+
+  pr-name-check:
+    name: PR name check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: PR name check
+        run: |
+          bash config/stage_1_style_tests/_stage_pr_name_check.sh "$PR_NAME" "$PR_AUTHOR"
+
+  code-style:
+    name: Code Style
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Code Style
+        run: |
+          bash config/stage_1_style_tests/_stage_run_lint.sh "$PR_NAME" "$PR_AUTHOR"
+
+  pymarkdownlnt-checks:
+    name: Pymarkdownlnt checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Pymarkdownlnt check
+        run: |
+          bash config/stage_1_style_tests/_stage_run_pymarkdownlnt.sh
+
+  mypy-checks:
+    name: Mypy checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: MyPy check
+        run: |
+          bash config/stage_1_style_tests/_stage_run_mypy.sh
+
+  flake8-checks:
+    name: Import style checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Flake8 check
+        run: |
+          bash config/stage_1_style_tests/_stage_run_flake8.sh
+
+  spellcheck:
+    name: Spellcheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    needs: [ install-dependencies ]
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Aspell
+        run: |
+          sudo apt-get install aspell aspell-en aspell-ru
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Spell check
+        run: |
+          bash config/spellcheck/_stage_spellcheck.sh
+
+  checking-core-utils:
+    name: Core utils checks
+    needs: [
+      install-dependencies
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Run crawler config checks
+        if: ${{ env.REPOSITORY_TYPE == 'admin' }}
+        run: |
+          bash config/core_utils_tests/_stage_core_utils_checks.sh "$PR_NAME" "$PR_AUTHOR"
+
+  stubgen:
+    name: Stub generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [
+      install-dependencies
+    ]
+    steps:
+      - uses: actions/checkout@master
+      - name: Install Aspell
+        run: |
+          sudo apt-get install aspell aspell-en aspell-ru
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Stubgen check
+        if: ${{ env.REPOSITORY_TYPE == 'admin' }}
+        run: |
+          bash config/stage_1_style_tests/_stage_run_stubgen.sh
+
+  # Stage 2. Crawler tests
+  checking-crawler-config:
+    name: Crawler checks config
+    needs: [
+      code-style,
+      mypy-checks,
+      flake8-checks
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Run crawler config checks
+        run: |
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper stage_2_1_crawler_config_check
+          ls -la ~/.local/bin
+
+  checking-crawler:
+    name: Crawler checks
+    needs: [
+      code-style,
+      mypy-checks,
+      flake8-checks
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Run crawler config checks
+        run: |
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper stage_2_2_crawler_check
+
+  checking-parser:
+    name: Parser checks
+    needs: [
+      code-style,
+      mypy-checks,
+      flake8-checks
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Run crawler config checks
+        run: |
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper stage_2_3_HTML_parser_check
+
+  collecting-articles-from-internet:
+    name: Download articles
+    needs: [
+      checking-crawler-config,
+      checking-crawler,
+      checking-parser
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Crawl a raw dataset from web
+        run: |
+          bash config/stage_2_crawler_tests/_stage_collect_articles.sh "$PR_NAME" "$PR_AUTHOR"
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper stage_2_4_dataset_volume_check
+      - name: Archive raw dataset
+        uses: actions/upload-artifact@v3
+        with:
+          name: raw-dataset
+          path: |
+            tmp/articles
+          retention-days: 5
+
+  checking-articles-dataset:
+    name: Validate dataset
+    needs: [ collecting-articles-from-internet ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run metadata validation
+        run: |
+          bash config/run_copy_files.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_5_scrapper stage_2_5_dataset_validation
+
+  milestone-1-crawler-is-working:
+    name: Crawler is accepted!
+    needs: [
+      checking-articles-dataset
+    ]
+    env:
+      PR_NAME: ${{ github.event.pull_request.title }}
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Congratulations
+        run: |
+          bash config/stage_2_crawler_tests/_stage_accept_dataset.sh "$PR_NAME" "$PR_AUTHOR"
+
+  # Stage 3. Pipeline tests
+  milestone-2-pipeline:
+    name: Starting pipeline checks!
+    needs: [ milestone-1-crawler-is-working ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Congratulations
+        run: |
+          echo "Preparing pipeline checks"
+
+
+  checking-raw-dataset-before-running-pipeline:
+    name: Pipe verifies dataset
+    needs: [
+      milestone-2-pipeline
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run crawler config checks
+        run: |
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_1_dataset_sanity_checks
+
+  checking-corpus-manager-creates-instances-correctly:
+    name: CorpusManager detects articles
+    needs: [
+      milestone-2-pipeline
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run CorpusManager tests
+        run: |
+          bash config/run_copy_files.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_2_corpus_manager_checks
+
+  checking-conllu-token-works-correctly:
+    name: ConlluToken displays tokens
+    needs: [
+      milestone-2-pipeline
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run Conllu tests
+        run: |
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_3_conllu_token_checks
+
+  checking-student-processing-works-for-admin-dataset:
+    name: Pipe processed admin data
+    needs: [
+      milestone-2-pipeline
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run metadata validation
+        run: |
+          bash config/run_copy_files.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_4_admin_data_processing
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_6_advanced_morphological_processing
+
+  run-student-processing:
+    name: Pipe processed student data
+    needs: [
+      milestone-2-pipeline
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: raw-dataset
+      - name: Run validation of `_processed.txt` files
+        run: |
+          bash config/stage_3_pipeline_tests/_stage_check_on_student_dataset.sh "$PR_AUTHOR"
+      - name: Archive processed dataset
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: processed-dataset
+          path: |
+            tmp/articles
+          retention-days: 5
+
+  checking-student-processing-works-for-student-dataset:
+    name: Validate final dataset
+    needs: [
+      run-student-processing
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: processed-dataset
+      - name: Run validation of `_processed.txt` files
+        run: |
+          bash config/run_copy_files.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_3_5_student_dataset_validation
+      - name: Run validation of `.conllu` files
+        run: |
+          bash config/stage_3_pipeline_tests/_stage_check_student_conllu_validation.sh
+
+  running-pos-pipeline-tests:
+    name: POSFrequencyPipeline tests
+    needs: [
+      checking-raw-dataset-before-running-pipeline,
+      checking-student-processing-works-for-admin-dataset,
+      checking-student-processing-works-for-student-dataset,
+      checking-corpus-manager-creates-instances-correctly,
+      checking-conllu-token-works-correctly,
+    ]
+    env:
+      PR_AUTHOR: ${{ github.actor }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        uses: actions/download-artifact@v3
+        with:
+          name: processed-dataset
+      - name: Congratulations
+        run: |
+          bash config/stage_5_pos_frequency_pipeline_tests/_stage_check_pos_pipeline.sh "$PR_AUTHOR"
+          bash config/_stage_run_pytest.sh "$PR_NAME" "$PR_AUTHOR" lab_6_pipeline stage_4_pos_frequency_pipeline_checks
+      - name: Archive processed dataset
+        continue-on-error: true
+        uses: actions/upload-artifact@v3
+        with:
+          name: processed-dataset
+          path: |
+            tmp/articles
+          retention-days: 5
+
+  milestone-2-pipeline-is-working:
+    name: Pipeline is accepted!
+    needs: [
+      running-pos-pipeline-tests
+    ]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Congratulations
+        run: |
+          echo "You have completed the assignment!"
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [ running-pos-pipeline-tests ]
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup FIPL environment
+        uses: fipl-hse/setup-env-action@v0.8
+      - name: Download previously collected dataset
+        continue-on-error: true
+        if: ${{ env.REPOSITORY_TYPE == 'admin' }}
+        uses: actions/download-artifact@v3
+        with:
+          name: processed-dataset
+      - name: Run start
+        if: ${{ env.REPOSITORY_TYPE == 'admin' }}
+        run: |
+          bash config/unpack_archived_dataset.sh
+          bash config/collect_coverage/run_coverage.sh

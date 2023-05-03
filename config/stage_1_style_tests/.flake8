@@ -1,0 +1,22 @@
+[flake8]
+max-line-length = 100
+exclude =
+    # Ignoring virtual environments
+    venv*,
+    # Ignoring automatically generated code
+    build/,
+    # Ignoring 3rd party borrowed code
+    core_utils/tools/ud_validator/validate.py
+
+# Defining local imports
+application_import_names =
+    config,
+    core_utils,
+    lab_5_scrapper,
+    lab_6_pipeline
+
+# Filtering comments only regarding imports
+select = I
+
+# Calculating number of issues in total
+count = True
